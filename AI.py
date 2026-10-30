@@ -1,3 +1,4 @@
+from requests import session
 import streamlit as st
 import os
 from openai import OpenAI
@@ -51,37 +52,47 @@ system_prompt = "你是当下流行的卡通人物%s，你是一个非常聪明�
 def get_current_time():
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
+#当前时间作为会话文件的名字
+if "current_session" not in st.session_state:
+        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        st.session_state.current_session = now
+
+        #初始化聊天信息
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 #保存当前会话的信息
 def save_session():
-    """保存当前会话的信息。"""
-    if not st.session_state.messages:
-        return
-
-    os.makedirs("sessions", exist_ok=True)
-    session_date = {
-        "nick_name": st.session_state.nick_name,
-        "nature": st.session_state.nature,
-        "current_session": st.session_state.current_session,
-        "messages": st.session_state.messages,
-    }
-    file_path = os.path.join(
-        "sessions", f"{st.session_state.current_session}.json"
-    )
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(session_date, f, ensure_ascii=False, indent=4)
+        """
+        保存当前会话的信息
+        """
+if st.session_state.current_session:
+        session_date = {
+              "nick_name":st.session_state.nick_name,
+              "nature":st.session_state.nature,
+              "current_session":st.session_state.current_session,
+              "messages":st.session_state.messages
+           }
+        
+        
+        if not os.path.exists('sessions'):
+            os.makedirs('sessions')
+        with open(f'sessions/{st.session_state.current_session}.json','w',encoding='utf-8') as f:
+            json.dump(session_date,f,ensure_ascii=False,indent=4)
 
 #展示会话信息列表
 def show_session():
-    """返回按时间倒序排列的会话名称。"""
-    if not os.path.isdir("sessions"):
-        return []
-
-    session_list = [
-        filename[:-5]
-        for filename in os.listdir("sessions")
-        if filename.endswith(".json")
-    ]
-    return sorted(session_list, reverse=True)
+    """
+    展示会话信息列表
+    """
+    session_list = []
+    if os.path.exists('sessions'):
+        file_list = os.listdir('sessions')
+        for session in file_list:
+            if session.endswith('.json'):
+                session_list.append(session[:-5])
+    session_list.sort(reverse=True)
+    return session_list
 
 #加载会话信息
 def load_session(session_name):
@@ -89,17 +100,11 @@ def load_session(session_name):
     加载会话信息
     """
     try:
-        with open(
-            f'sessions/{session_name}.json', 'r', encoding='utf-8'
-        ) as f:
-            session_date = json.load(f)
-        st.session_state.nick_name = session_date.get("nick_name", "奶龙")
-        st.session_state.nature = session_date.get(
-            "nature", "聪明、有趣、可爱"
-        )
-        st.session_state.messages = session_date.get(
-            "messages", session_date.get("message", [])
-        )
+     with open(f'sessions/{session_name}.json','r',encoding='utf-8') as f:
+        session_date = json.load(f)
+        st.session_state.nick_name = session_date["nick_name"]
+        st.session_state.nature = session_date["nature"]
+        st.session_state.messages = session_date["messages"]
         st.session_state.current_session = session_name
     except Exception as e:
         st.error(f"加载会话信息失败：{e}")
@@ -124,12 +129,8 @@ def delete_session(session_name):
 
 
 
-#当前时间作为会话文件的名字
-if "current_session" not in st.session_state:
-    st.session_state.current_session = get_current_time()
-#初始化聊天信息
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+ 
+
 
 #展示聊天信息
 st.text(f"会话名称：{st.session_state.current_session}")
@@ -150,13 +151,20 @@ with st.sidebar:
     st.subheader("与神的对话")
     #对话记录
     if st.button("新建对话",width = "stretch"):
-        if st.session_state.messages:
-            #保存当前对话
-            save_session()
-            #创建一个新的对话
-            st.session_state.messages = []
-            st.session_state.current_session = get_current_time()
-            st.rerun()
+    #保存当前对话
+      
+       save_session()
+    #创建一个新的对话
+       if st.session_state.messages:
+          
+             
+         st.session_state.messages = []
+         st.session_state.current_session = get_current_time()
+        #  st.session_state.current_message = st.session_state.current_message
+         
+         save_session()
+
+         st.rerun()
 
     
     #展示对话记录
@@ -191,8 +199,8 @@ if prompt:
     st.chat_message("user").write(prompt)
     st.session_state.messages.append({"role": "user", "content":  prompt })
 
-    #发给大模型的消息
-    response = client.chat.completions.create(
+#发给大模型的消息
+response = client.chat.completions.create(
         model="deepseek-flash",
         messages=[
             {"role": "system", "content": system_prompt %(st.session_state.nick_name, st.session_state.nature)  },
@@ -201,21 +209,20 @@ if prompt:
         ],
         stream= True,
     )
-    #流式输出模型的回答相应
-    response_messages = st.empty()
-    full_responce = ""
-    for chunk in response:
-        if chunk.choices[0].delta.content is not None:
-            content = chunk.choices[0].delta.content
-            full_responce += content
+#流式输出模型的回答相应
+response_messages = st.empty()
+full_responce = " "
+for chunk in response:
+        
+    if chunk.choices[0].delta.content is not None:
+        content = chunk.choices[0].delta.content
+        full_responce += content
             #打印
-            response_messages.chat_message("assistant").write(full_responce)
+        response_messages.chat_message("assistant").write(full_responce)
 
-    #把模型的回答保存到messages中，以便于展示历史问题
-    st.session_state.messages.append(
-        {"role": "assistant", "content": full_responce}
-    )
-    #保存历史对话
-    save_session()
+#把模型的回答保存到messages中，以便于展示历史问题
+st.session_state.messages.append({"role": "assistant", "content": full_responce})
+#保存历史对话
+save_session()
     
  
