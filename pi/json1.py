@@ -2,7 +2,7 @@ import json
 #写入json文件内容
 
 Love = {
-    "name":"wangwenjing",
+    "name":"she",
     "hobby":"beaytiful "
 }
 with open("love.json","w",encoding="utf-8") as f:
